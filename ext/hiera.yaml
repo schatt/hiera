@@ -1,10 +1,10 @@
 ---
-:backend:
+:backends:
   - yaml
 :hierarchy:
   - defaults
-  - %{clientcert}
-  - %{environment}
+  - "%{clientcert}"
+  - "%{environment}"
   - global
 
 :yaml:
