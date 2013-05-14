@@ -1,7 +1,15 @@
 require 'hiera/util'
+require 'hiera/recursive_lookup'
+
+begin
+  require 'deep_merge'
+rescue LoadError
+end
 
 class Hiera
   module Backend
+    INTERPOLATION = /%\{([^\}]*)\}/
+
     class << self
       # Data lives in /var/lib/hiera by default.  If a backend
       # supplies a datadir in the config it will be used and
@@ -10,7 +18,7 @@ class Hiera
         backend = backend.to_sym
         default = Hiera::Util.var_dir
 
-        if Config.include?(backend)
+        if Config.include?(backend) && !Config[backend].nil?
           parse_string(Config[backend][:datadir] || default, scope)
         else
           parse_string(default, scope)
@@ -61,43 +69,38 @@ class Hiera
         end
       end
 
-      # Parse a string like '%{foo}' against a supplied
+      # Parse a string like <code>'%{foo}'</code> against a supplied
       # scope and additional scope.  If either scope or
-      # extra_scope includes the varaible 'foo' it will
+      # extra_scope includes the variable 'foo', then it will
       # be replaced else an empty string will be placed.
       #
-      # If both scope and extra_data has "foo" scope
-      # will win.  See hiera-puppet for an example of
-      # this to make hiera aware of additional non scope
-      # variables
+      # If both scope and extra_data has "foo", then the value in scope
+      # will be used.
+      #
+      # @param data [String] The string to perform substitutions on.
+      #   This will not be modified, instead a new string will be returned.
+      # @param scope [#[]] The primary source of data for substitutions.
+      # @param extra_data [#[]] The secondary source of data for substitutions.
+      # @return [String] A copy of the data with all instances of <code>%{...}</code> replaced.
+      #
+      # @api public
       def parse_string(data, scope, extra_data={})
-        return nil unless data
-
-        tdata = data.clone
-
-        if tdata.is_a?(String)
-          while tdata =~ /%\{(.+?)\}/
-            begin
-              var = $1
-
-              val = ""
-
-              # Puppet can return :undefined for unknown scope vars,
-              # If it does then we still need to evaluate extra_data
-              # before returning an empty string.
-              if scope[var] && scope[var] != :undefined
-                  val = scope[var]
-              elsif extra_data[var]
-                  val = extra_data[var]
-              end
-            end until val != "" || var !~ /::(.+)/
-
-            tdata.gsub!(/%\{(::)?#{var}\}/, val)
-          end
-        end
-
-        return tdata
+        interpolate(data, Hiera::RecursiveLookup.new(scope, extra_data))
       end
+
+      def interpolate(data, values)
+        if data.is_a?(String)
+          data.gsub(INTERPOLATION) do
+            name = $1
+            values.lookup(name) do |value|
+              interpolate(value, values)
+            end
+          end
+        else
+          data
+        end
+      end
+      private :interpolate
 
       # Parses a answer received from data files
       #
@@ -111,7 +114,8 @@ class Hiera
         elsif data.is_a?(Hash)
           answer = {}
           data.each_pair do |key, val|
-            answer[key] = parse_answer(val, scope, extra_data)
+            interpolated_key = parse_string(key, scope, extra_data)
+            answer[interpolated_key] = parse_answer(val, scope, extra_data)
           end
 
           return answer
@@ -133,6 +137,26 @@ class Hiera
           answer # Hash structure should be preserved
         else
           answer
+        end
+      end
+
+      # Merges two hashes answers with the configured merge behavior.
+      #         :merge_behavior: {:native|:deep|:deeper}
+      #
+      # Deep merge options use the Hash utility function provided by [deep_merge](https://github.com/peritor/deep_merge)
+      #
+      #  :native => Native Hash.merge
+      #  :deep   => Use Hash.deep_merge  
+      #  :deeper => Use Hash.deep_merge!
+      #
+      def merge_answer(left,right)
+        case Config[:merge_behavior]
+        when :deeper,'deeper'
+          left.deep_merge!(right)
+        when :deep,'deep'
+          left.deep_merge(right)
+        else # Native and undefined
+          left.merge(right)
         end
       end
 
@@ -167,7 +191,7 @@ class Hiera
               when :hash
                 raise Exception, "Hiera type mismatch: expected Hash and got #{new_answer.class}" unless new_answer.kind_of? Hash
                 answer ||= {}
-                answer = new_answer.merge answer
+                answer = merge_answer(new_answer,answer)
               else
                 answer = new_answer
                 break
