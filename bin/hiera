@@ -24,6 +24,7 @@ end
 require 'hiera'
 require 'hiera/util'
 require 'optparse'
+require 'pp'
 
 options = {
   :default => nil,
@@ -31,8 +32,11 @@ options = {
   :scope   => {},
   :key     => nil,
   :verbose => false,
-  :resolution_type => :priority
+  :resolution_type => :priority,
+  :format => :ruby
 }
+
+initial_scopes = Array.new
 
 # Loads the scope from YAML or JSON files
 def load_scope(source, type=:yaml)
@@ -112,6 +116,26 @@ def load_scope(source, type=:yaml)
   scope
 end
 
+def output_answer(ans, format)
+  case format
+  when :json
+    require 'json'
+    puts JSON.dump(ans)
+  when :ruby
+    if ans.is_a?(String)
+      puts ans
+    else
+      pp ans
+    end
+  when :yaml
+    require 'yaml'
+    puts ans.to_yaml
+  else
+    STDERR.puts "Unknown output format: #{v}"
+    exit 1
+  end
+end
+
 OptionParser.new do |opts|
   opts.banner = "Usage: hiera [options] key [default value] [variable='text'...]\n\nThe default value will be used if no value is found for the key. Scope variables\nwill be interpolated into %{variable} placeholders in the hierarchy and in\nreturned values.\n\n"
 
@@ -142,41 +166,43 @@ OptionParser.new do |opts|
   end
 
   opts.on("--json SCOPE", "-j", "JSON format file to load scope from") do |v|
-    begin
-      options[:scope] = load_scope(v, :json)
-    rescue Exception => e
-      STDERR.puts "Could not load JSON scope: #{e.class}: #{e}"
-      exit 1
-    end
+    initial_scopes << { :type => :json, :value => v, :name => "JSON" }
   end
 
   opts.on("--yaml SCOPE", "-y", "YAML format file to load scope from") do |v|
-    begin
-      options[:scope] = load_scope(v)
-    rescue Exception => e
-      STDERR.puts "Could not load YAML scope: #{e.class}: #{e}"
-      exit 1
-    end
+    initial_scopes << { :type => :yaml, :value => v, :name => "YAML" }
   end
 
   opts.on("--mcollective IDENTITY", "-m", "Use facts from a node (via mcollective) as scope") do |v|
-    begin
-      options[:scope] = load_scope(v, :mcollective)
-    rescue Exception => e
-      STDERR.puts "Could not load MCollective scope: #{e.class}: #{e}"
-      exit 1
-    end
+    initial_scopes << { :type => :mcollective, :value => v, :name => "Mcollective" }
   end
 
   opts.on("--inventory_service IDENTITY", "-i", "Use facts from a node (via Puppet's inventory service) as scope") do |v|
-    begin
-      options[:scope] = load_scope(v, :inventory_service)
-    rescue Exception => e
-      STDERR.puts "Could not load Puppet inventory service scope: #{e.class}: #{e}"
+    initial_scopes << { :type => :inventory_service, :value => v, :name => "Puppet inventory service" }
+  end
+
+  opts.on("--format TYPE", "-f", "Output the result in a specific format (ruby, yaml or json); default is 'ruby'") do |v|
+    options[:format] = case v
+    when 'json', 'ruby', 'yaml'
+      v.to_sym
+    else
+      STDERR.puts "Unknown output format: #{v}"
       exit 1
     end
   end
 end.parse!
+
+unless initial_scopes.empty?
+  initial_scopes.each { |this_scope|
+    # Load initial scope
+    begin
+      options[:scope] = load_scope(this_scope[:value], this_scope[:type])
+    rescue Exception => e
+      STDERR.puts "Could not load #{this_scope[:name]} scope: #{e.class}: #{e}"
+      exit 1
+    end
+  }
+end
 
 # arguments can be:
 #
@@ -219,8 +245,4 @@ end
 
 ans = hiera.lookup(options[:key], options[:default], options[:scope], nil, options[:resolution_type])
 
-if ans.is_a?(String)
-  puts ans
-else
-  p ans
-end
+output_answer(ans, options[:format])

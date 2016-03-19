@@ -6,14 +6,10 @@ class Hiera
       let(:default_config) do
         {
           :backends  => ["yaml"],
-          :hierarchy => "common",
+          :hierarchy => ['nodes/%{::trusted.certname}', 'common'],
           :logger    => "console",
           :merge_behavior=>:native
         }
-      end
-
-      it "should treat string sources as a filename" do
-        expect { Config.load("/nonexisting") }.to raise_error
       end
 
       it "should raise an error for missing config files" do
@@ -34,21 +30,23 @@ class Hiera
         File.expects(:exist?).with("/nonexisting").returns(true)
         YAML.expects(:load_file).with("/nonexisting").returns(YAML.load(""))
 
-        Config.load("/nonexisting").should == default_config
+        expect(Config.load("/nonexisting")).to eq(default_config)
       end
 
       it "should use hash data as source if supplied" do
         config = Config.load({"rspec" => "test"})
-        config["rspec"].should == "test"
+        expect(config["rspec"]).to eq("test")
       end
 
       it "should merge defaults with the loaded or supplied config" do
         config = Config.load({})
-        config.should == {:backends => ["yaml"], :hierarchy => "common", :logger => "console", :merge_behavior=>:native}
+        expect(config).to eq({:backends => ["yaml"], :hierarchy => ['nodes/%{::trusted.certname}', 'common'],
+          :logger => "console", :merge_behavior=>:native})
       end
 
       it "should force :backends to be a flattened array" do
-        Config.load({:backends => [["foo", ["bar"]]]}).should == {:backends => ["foo", "bar"], :hierarchy => "common", :logger => "console", :merge_behavior=>:native}
+        expect(Config.load({:backends => [["foo", ["bar"]]]})).to eq({:backends => ["foo", "bar"],
+          :hierarchy => ['nodes/%{::trusted.certname}', 'common'], :logger => "console", :merge_behavior=>:native})
       end
 
       it "should load the supplied logger" do
@@ -61,7 +59,7 @@ class Hiera
         Config.load({})
       end
 
-      context "loading '/dev/null' as spec tests do" do
+      context "loading '/dev/null' as spec tests do", :unless => Hiera::Util.microsoft_windows? do
         before :each do
           # Simulate the behavior of YAML.load_file('/dev/null') in MRI 1.9.3p194
           Config.stubs(:yaml_load_file).
@@ -69,7 +67,22 @@ class Hiera
         end
 
         it "is not exceptional behavior" do
-          expect { Config.load('/dev/null') }.to_not raise_error
+          Config.load('/dev/null')
+        end
+      end
+
+      describe "if deep_merge can't be loaded" do
+        let(:error_message) { "Must have 'deep_merge' gem installed for the configured merge_behavior." }
+        before(:each) do
+          Config.expects(:require).with("deep_merge").raises(LoadError, "unable to load")
+        end
+
+        it "should error if merge_behavior is 'deep'" do
+          expect { Config.load(:merge_behavior => :deep) }.to raise_error(Hiera::Error, error_message)
+        end
+
+        it "should error if merge_behavior is 'deeper'" do
+          expect { Config.load(:merge_behavior => :deeper) }.to raise_error(Hiera::Error, error_message)
         end
       end
     end
@@ -95,8 +108,8 @@ class Hiera
     describe "#include?" do
       it "should correctly report inclusion" do
         Config.load({})
-        Config.include?(:foo).should == false
-        Config.include?(:logger).should == true
+        expect(Config.include?(:foo)).to eq(false)
+        expect(Config.include?(:logger)).to eq(true)
       end
     end
   end

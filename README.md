@@ -84,6 +84,23 @@ Hiera can search through all the tiers in a hierarchy and merge the result into 
 array.  This is used in the hiera-puppet project to replace External Node Classifiers by
 creating a Hiera compatible include function.
 
+### Qualified Key Lookup
+You can use a qualified key to lookup a value that is contained inside a hash or array:
+
+<pre>
+$ hiera user
+{"name"=>"kim", "home"=>"/home/kim"}
+$ hiera user.name
+kim
+</pre>
+
+<pre>
+$ hiera ssh_users
+["root", "jeff", "gary", "hunter"]
+$ hiera ssh_users.0
+root
+</pre>
+
 ## Future Enhancements
 
  * More backends should be created
@@ -117,33 +134,33 @@ A sample configuration file can be seen here:
 :logger: console
 
 :hierarchy:
-  - "%{location}"
+  - "sites/%{location}"
   - common
 
 :yaml:
-   :datadir: /etc/puppet/hieradata
+   :datadir: /etc/puppetlabs/code/hieradata
 
 :puppet:
    :datasource: data
 </pre>
 
-This configuration will require YAML files in  _/etc/puppet/hieradata_ these need to contain
+This configuration will require YAML files in  _/etc/puppetlabs/code/hieradata_ these need to contain
 Hash data, sample files matching the hierarchy described in the _Why?_ section are below:
 
-_/etc/puppet/hieradata/dc1.yaml_:
+_/etc/puppetlabs/code/hieradata/sites/dc1.yaml_:
 <pre>
 ---
 ntpserver: ntp1.dc1.example.com
 sysadmin: dc1noc@example.com
 </pre>
 
-_/etc/puppet/hieradata/dc2.yaml_:
+_/etc/puppetlabs/code/hieradata/sites/dc2.yaml_:
 <pre>
 ---
 ntpserver: ntp1.dc2.example.com
 </pre>
 
-_/etc/puppet/hieradata/common.yaml_:
+_/etc/puppetlabs/code/hieradata/common.yaml_:
 <pre>
 ---
 sysadmin: "sysadmin@%{domain}"
@@ -161,13 +178,13 @@ store as found on your Puppet Masters.
 If no data is found and the facts had a location=dc1 fact the default would be _sites/dc1_
 
 <pre>
-$ hiera acme_version 'sites/%{location}' --yaml /var/lib/puppet/yaml/facts/example.com.yaml
+$ hiera acme_version 'sites/%{location}' --yaml /opt/puppetlabs/puppet/cache/yaml/facts/example.com.yaml
 </pre>
 
 You can also supply extra facts on the CLI, assuming Puppet facts did not have a location fact:
 
 <pre>
-$ hiera acme_version 'sites/%{location}' location=dc1 --yaml /var/lib/puppet/yaml/facts/example.com.yaml
+$ hiera acme_version 'sites/%{location}' location=dc1 --yaml /opt/puppetlabs/puppet/cache/yaml/facts/example.com.yaml
 </pre>
 
 Or if you use MCollective you can fetch the scope from a remote node's facts:
@@ -193,10 +210,10 @@ require 'hiera'
 require 'puppet'
 
 # load the facts for example.com
-scope = YAML.load_file("/var/lib/puppet/yaml/facts/example.com.yaml").values
+scope = YAML.load_file("/opt/puppetlabs/puppet/cache/yaml/facts/example.com.yaml")
 
 # create a new instance based on config file
-hiera = Hiera.new(:config => "/etc/puppet/hiera.yaml")
+hiera = Hiera.new(:config => "/etc/puppetlabs/code/hiera.yaml")
 
 # resolve the 'acme_version' variable based on scope
 #
@@ -235,5 +252,25 @@ See LICENSE file.
 
 ## Support
 
-Please log tickets and issues at our [Projects site](http://projects.puppetlabs.com)
+Please log tickets and issues at our [JIRA tracker](http://tickets.puppetlabs.com).  A [mailing
+list](https://groups.google.com/forum/?fromgroups#!forum/puppet-users) is
+available for asking questions and getting help from others. In addition there
+is an active #puppet channel on Freenode.
 
+We use semantic version numbers for our releases, and recommend that users stay
+as up-to-date as possible by upgrading to patch releases and minor releases as
+they become available.
+
+Bugfixes and ongoing development will occur in minor releases for the current
+major version. Security fixes will be backported to a previous major version on
+a best-effort basis, until the previous major version is no longer maintained.
+
+
+For example: If a security vulnerability is discovered in Hiera 1.3.0, we
+would fix it in the 1 series, most likely as 1.3.1. Maintainers would then make
+a best effort to backport that fix onto the latest Hiera release they carry.
+
+Long-term support, including security patches and bug fixes, is available for
+commercial customers. Please see the following page for more details:
+
+[Puppet Enterprise Support Lifecycle](http://puppetlabs.com/misc/puppet-enterprise-lifecycle)

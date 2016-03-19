@@ -4,3 +4,11 @@ ext/packaging
 .bundle/
 vendor/
 Gemfile.lock
+Gemfile.local
+/.project
+.idea/
+/acceptance/.bundle
+/acceptance/junit
+/acceptance/log
+/acceptance/tmp
+/acceptance/merged_options.rb

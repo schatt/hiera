@@ -1,14 +1,27 @@
 language: ruby
+sudo: false
 bundler_args: --without development
-script: "bundle exec rake spec SPEC_OPTS='--format documentation'"
+script: "bundle exec rake $CHECK"
 notifications:
   email: false
 rvm:
-  - 1.9.3
-  - 1.8.7
+  - 2.3.0
+  - 2.2.4
+  - 2.1.8
   - 2.0.0
-  - ruby-head
+  - 1.9.3
+
+env:
+  - "CHECK=spec"
+  - "CHECK=commits"
+
 matrix:
-  allow_failures:
-    - rvm: ruby-head
+  exclude:
+    - rvm: 2.3.0
+      env: "CHECK=commits"
+    - rvm: 2.2.4
+      env: "CHECK=commits"
     - rvm: 2.0.0
+      env: "CHECK=commits"
+    - rvm: 1.9.3
+      env: "CHECK=commits"

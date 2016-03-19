@@ -25,7 +25,7 @@ class Hiera
           Backend.expects(:datafile).with(:json, {}, "one", "json").returns(nil)
           Backend.expects(:datafile).with(:json, {}, "two", "json").returns(nil)
 
-          @backend.lookup("key", {}, nil, :priority)
+          expect { @backend.lookup("key", {}, nil, :priority, nil) }.to throw_symbol(:no_such_key)
         end
 
         it "should retain the data types found in data files" do
@@ -33,11 +33,11 @@ class Hiera
           Backend.expects(:datafile).with(:json, {}, "one", "json").returns("/nonexisting/one.json").times(3)
           File.stubs(:exist?).with("/nonexisting/one.json").returns(true)
 
-          @cache.expects(:read).with("/nonexisting/one.json", Hash, {}).returns({"stringval" => "string", "boolval" => true, "numericval" => 1}).times(3)
+          @cache.expects(:read_file).with("/nonexisting/one.json", Hash).returns({"stringval" => "string", "boolval" => true, "numericval" => 1}).times(3)
 
-          @backend.lookup("stringval", {}, nil, :priority).should == "string"
-          @backend.lookup("boolval", {}, nil, :priority).should == true
-          @backend.lookup("numericval", {}, nil, :priority).should == 1
+          expect(@backend.lookup("stringval", {}, nil, :priority, nil)).to eq("string")
+          expect(@backend.lookup("boolval", {}, nil, :priority, nil)).to eq(true)
+          expect(@backend.lookup("numericval", {}, nil, :priority, nil)).to eq(1)
         end
 
         it "should pick data earliest source that has it for priority searches" do
@@ -47,14 +47,14 @@ class Hiera
           Backend.expects(:datafile).with(:json, scope, "two", "json").never
 
           File.stubs(:exist?).with("/nonexisting/one.json").returns(true)
-          @cache.expects(:read).with("/nonexisting/one.json", Hash, {}).returns({"key" => "test_%{rspec}"})
+          @cache.expects(:read_file).with("/nonexisting/one.json", Hash).returns({"key" => "test_%{rspec}"})
 
-          @backend.lookup("key", scope, nil, :priority).should == "test_test"
+          expect(@backend.lookup("key", scope, nil, :priority, nil)).to eq("test_test")
         end
 
         it "should build an array of all data sources for array searches" do
           Hiera::Backend.stubs(:empty_answer).returns([])
-          Backend.stubs(:parse_answer).with('answer', {}).returns("answer")
+          Backend.stubs(:parse_answer).with('answer', {}, {}, anything).returns("answer")
           Backend.expects(:datafile).with(:json, {}, "one", "json").returns("/nonexisting/one.json")
           Backend.expects(:datafile).with(:json, {}, "two", "json").returns("/nonexisting/two.json")
 
@@ -63,21 +63,21 @@ class Hiera
           File.expects(:exist?).with("/nonexisting/one.json").returns(true)
           File.expects(:exist?).with("/nonexisting/two.json").returns(true)
 
-          @cache.expects(:read).with("/nonexisting/one.json", Hash, {}).returns({"key" => "answer"})
-          @cache.expects(:read).with("/nonexisting/two.json", Hash, {}).returns({"key" => "answer"})
+          @cache.expects(:read_file).with("/nonexisting/one.json", Hash).returns({"key" => "answer"})
+          @cache.expects(:read_file).with("/nonexisting/two.json", Hash).returns({"key" => "answer"})
 
-          @backend.lookup("key", {}, nil, :array).should == ["answer", "answer"]
+          expect(@backend.lookup("key", {}, nil, :array, nil)).to eq(["answer", "answer"])
         end
 
         it "should parse the answer for scope variables" do
-          Backend.stubs(:parse_answer).with('test_%{rspec}', {'rspec' => 'test'}).returns("test_test")
+          Backend.stubs(:parse_answer).with('test_%{rspec}', {'rspec' => 'test'}, {}, anything).returns("test_test")
           Backend.expects(:datasources).yields("one")
           Backend.expects(:datafile).with(:json, {"rspec" => "test"}, "one", "json").returns("/nonexisting/one.json")
 
           File.expects(:exist?).with("/nonexisting/one.json").returns(true)
-          @cache.expects(:read).with("/nonexisting/one.json", Hash, {}).returns({"key" => "test_%{rspec}"})
+          @cache.expects(:read_file).with("/nonexisting/one.json", Hash).returns({"key" => "test_%{rspec}"})
 
-          @backend.lookup("key", {"rspec" => "test"}, nil, :priority).should == "test_test"
+          expect(@backend.lookup("key", {"rspec" => "test"}, nil, :priority, nil)).to eq("test_test")
         end
       end
     end

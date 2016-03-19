@@ -8,23 +8,20 @@ class Hiera
         @cache = cache || Filecache.new
       end
 
-      def lookup(key, scope, order_override, resolution_type)
+      def lookup(key, scope, order_override, resolution_type, context)
         answer = nil
+        found = false
 
         Hiera.debug("Looking up #{key} in YAML backend")
 
-        Backend.datasources(scope, order_override) do |source|
-          Hiera.debug("Looking for data source #{source}")
-          yamlfile = Backend.datafile(:yaml, scope, source, "yaml") || next
-
-          next unless File.exist?(yamlfile)
-
-          data = @cache.read(yamlfile, Hash, {}) do |data|
-            YAML.load(data)
+        Backend.datasourcefiles(:yaml, scope, "yaml", order_override) do |source, yamlfile|
+          data = @cache.read_file(yamlfile, Hash) do |data|
+            YAML.load(data) || {}
           end
 
           next if data.empty?
           next unless data.include?(key)
+          found = true
 
           # Extra logging that we found the key. This can be outputted
           # multiple times if the resolution type is array or hash but that
@@ -37,23 +34,29 @@ class Hiera
           # the array
           #
           # for priority searches we break after the first found data item
-          new_answer = Backend.parse_answer(data[key], scope)
-          case resolution_type
+          new_answer = Backend.parse_answer(data[key], scope, {}, context)
+          case resolution_type.is_a?(Hash) ? :hash : resolution_type
           when :array
-            raise Exception, "Hiera type mismatch: expected Array and got #{new_answer.class}" unless new_answer.kind_of? Array or new_answer.kind_of? String
+            raise Exception, "Hiera type mismatch for key '#{key}': expected Array and got #{new_answer.class}" unless new_answer.kind_of? Array or new_answer.kind_of? String
             answer ||= []
             answer << new_answer
           when :hash
-            raise Exception, "Hiera type mismatch: expected Hash and got #{new_answer.class}" unless new_answer.kind_of? Hash
+            raise Exception, "Hiera type mismatch for key '#{key}': expected Hash and got #{new_answer.class}" unless new_answer.kind_of? Hash
             answer ||= {}
-            answer = Backend.merge_answer(new_answer,answer)
+            answer = Backend.merge_answer(new_answer, answer, resolution_type)
           else
             answer = new_answer
             break
           end
         end
-
+        throw :no_such_key unless found
         return answer
+      end
+
+      private
+
+      def file_exists?(path)
+        File.exist? path
       end
     end
   end

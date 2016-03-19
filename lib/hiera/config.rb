@@ -4,14 +4,14 @@ class Hiera::Config
     # load takes a string or hash as input, strings are treated as filenames
     # hashes are stored as data that would have been in the config file
     #
-    # Unless specified it will only use YAML as backend with a single
-    # 'common' hierarchy and console logger
+    # Unless specified it will only use YAML as backend with a
+    # hierarchy of 'nodes/%{::trusted.certname}' and 'common', and with a
+    # console logger.
     #
-    # @return [Hash] representing the configuration.  e.g.
-    #   {:backends => "yaml", :hierarchy => "common"}
+    # @return [Hash] representing the configuration.
     def load(source)
-      @config = {:backends => "yaml",
-                 :hierarchy => "common",
+      @config = {:backends => ["yaml"],
+                 :hierarchy => ["nodes/%{::trusted.certname}", "common"],
                  :merge_behavior => :native }
 
       if source.is_a?(String)
@@ -53,10 +53,9 @@ class Hiera::Config
       when :deep,'deep',:deeper,'deeper'
         begin
           require "deep_merge"
+          require "deep_merge/rails_compat"
         rescue LoadError
-          Hiera.warn "Ignoring configured merge_behavior"
-          Hiera.warn "Must have 'deep_merge' gem installed."
-          @config[:merge_behavior] = :native
+          raise Hiera::Error, "Must have 'deep_merge' gem installed for the configured merge_behavior."
         end
       end
     end
@@ -76,7 +75,7 @@ class Hiera::Config
         begin
           require "hiera/backend/#{backend.downcase}_backend"
         rescue LoadError => e
-          Hiera.warn "Cannot load backend #{backend}: #{e}"
+          raise "Cannot load backend #{backend}: #{e}"
         end
       end
     end

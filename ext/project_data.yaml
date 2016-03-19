@@ -7,7 +7,7 @@ summary: 'Light weight hierarchical data store'
 description: 'A pluggable data store for hierarcical data'
 version_file: 'lib/hiera.rb'
 # files and gem_files are space separated lists
-files: '[A-Z]* ext lib bin spec acceptance_tests'
+files: '[A-Z]* ext lib bin spec acceptance_tests install.rb'
 gem_files: '{bin,lib}/**/* COPYING README.md LICENSE'
 gem_require_path: 'lib'
 gem_test_files: 'spec/**/*'
@@ -15,3 +15,14 @@ gem_executables: 'hiera'
 gem_runtime_dependencies:
   json_pure:
 gem_default_executables: 'hiera'
+gem_platform_dependencies:
+  x86-mingw32:
+    gem_runtime_dependencies:
+      win32console: '1.3.2'
+      win32-dir: '~> 0.4.8'
+  x64-mingw32:
+    gem_runtime_dependencies:
+      win32-dir: '~> 0.4.8'
+bundle_platforms:
+  x86-mingw32: mingw
+  x64-mingw32: x64_mingw
